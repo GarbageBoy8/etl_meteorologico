@@ -13,6 +13,7 @@ load_dotenv()
 class ETLWeather:
     """
     Clase ETL para datos meteorológicos desde CSV, JSON y API
+    Tablas en ESPAÑOL para mayor claridad
     """
     
     def __init__(self):
@@ -223,6 +224,7 @@ class ETLWeather:
         - Estandariza formatos
         - Limpia datos
         - Valida rangos
+        - TRADUCE condiciones climáticas al ESPAÑOL
         """
         print("\n" + "="*80)
         print("INICIANDO TRANSFORMACIÓN DE DATOS")
@@ -248,7 +250,8 @@ class ETLWeather:
         print("\n🔄 Normalizando fechas...")
         try:
             self.df_combined['measurement_datetime'] = pd.to_datetime(
-                self.df_combined['measurement_datetime']
+                self.df_combined['measurement_datetime'],
+                format='mixed'
             )
             print("✅ Fechas normalizadas a formato datetime")
         except Exception as e:
@@ -307,6 +310,86 @@ class ETLWeather:
         self.df_combined['country_code'] = self.df_combined['country_code'].str.upper()
         print("✅ Nombres estandarizados")
         
+        # ---- TRANSFORMACIÓN 6: TRADUCIR CONDICIONES AL ESPAÑOL ----
+        print("\n🌐 Traduciendo condiciones climáticas al español...")
+        
+        # Diccionario de traducción inglés -> español
+        traduccion_condiciones = {
+            # Condiciones principales
+            'Clear': 'Despejado',
+            'Clouds': 'Nublado',
+            'Rain': 'Lluvia',
+            'Drizzle': 'Llovizna',
+            'Thunderstorm': 'Tormenta',
+            'Snow': 'Nieve',
+            'Mist': 'Neblina',
+            'Smoke': 'Humo',
+            'Haze': 'Bruma',
+            'Dust': 'Polvo',
+            'Fog': 'Niebla',
+            'Sand': 'Arena',
+            'Ash': 'Ceniza',
+            'Squall': 'Turbonada',
+            'Tornado': 'Tornado',
+            
+            # Descripciones
+            'clear sky': 'cielo despejado',
+            'few clouds': 'pocas nubes',
+            'scattered clouds': 'nubes dispersas',
+            'broken clouds': 'nubes fragmentadas',
+            'overcast clouds': 'muy nublado',
+            'light rain': 'lluvia ligera',
+            'moderate rain': 'lluvia moderada',
+            'heavy rain': 'lluvia intensa',
+            'very heavy rain': 'lluvia muy intensa',
+            'extreme rain': 'lluvia extrema',
+            'freezing rain': 'lluvia helada',
+            'light intensity drizzle': 'llovizna ligera',
+            'drizzle': 'llovizna',
+            'heavy intensity drizzle': 'llovizna intensa',
+            'light intensity shower rain': 'chubasco ligero',
+            'shower rain': 'chubasco',
+            'heavy intensity shower rain': 'chubasco intenso',
+            'ragged shower rain': 'chubasco irregular',
+            'thunderstorm with light rain': 'tormenta con lluvia ligera',
+            'thunderstorm with rain': 'tormenta con lluvia',
+            'thunderstorm with heavy rain': 'tormenta con lluvia intensa',
+            'light thunderstorm': 'tormenta ligera',
+            'thunderstorm': 'tormenta',
+            'heavy thunderstorm': 'tormenta intensa',
+            'ragged thunderstorm': 'tormenta irregular',
+            'thunderstorm with light drizzle': 'tormenta con llovizna ligera',
+            'thunderstorm with drizzle': 'tormenta con llovizna',
+            'thunderstorm with heavy drizzle': 'tormenta con llovizna intensa',
+            'light snow': 'nieve ligera',
+            'snow': 'nieve',
+            'heavy snow': 'nieve intensa',
+            'sleet': 'aguanieve',
+            'light shower sleet': 'aguanieve ligera',
+            'shower sleet': 'aguanieve',
+            'light rain and snow': 'lluvia y nieve ligera',
+            'rain and snow': 'lluvia y nieve',
+            'light shower snow': 'chubasco de nieve ligero',
+            'shower snow': 'chubasco de nieve',
+            'heavy shower snow': 'chubasco de nieve intenso',
+            'mist': 'neblina',
+            'smoke': 'humo',
+            'haze': 'bruma',
+            'sand/dust whirls': 'remolinos de arena/polvo',
+            'fog': 'niebla',
+            'sand': 'arena',
+            'dust': 'polvo',
+            'volcanic ash': 'ceniza volcánica',
+            'squalls': 'turbonadas',
+            'tornado': 'tornado'
+        }
+        
+        # Aplicar traducción
+        self.df_combined['condition_main'] = self.df_combined['condition_main'].replace(traduccion_condiciones)
+        self.df_combined['condition_description'] = self.df_combined['condition_description'].replace(traduccion_condiciones)
+        
+        print("✅ Condiciones traducidas al español")
+        
         # ---- RESUMEN ----
         print("\n" + "="*80)
         print("RESUMEN DE TRANSFORMACIÓN")
@@ -320,6 +403,8 @@ class ETLWeather:
         print(f"  Presión promedio: {self.df_combined['pressure_hpa'].mean():.2f} hPa")
         print(f"\n🌦️  Distribución por fuente:")
         print(self.df_combined['source_type'].value_counts())
+        print(f"\n🌤️  Condiciones climáticas más comunes:")
+        print(self.df_combined['condition_main'].value_counts().head(5))
         
         return self.df_combined
     
@@ -329,9 +414,9 @@ class ETLWeather:
     
     def cargar(self):
         """
-        Carga los datos transformados a PostgreSQL
+        Carga los datos transformados a PostgreSQL con nombres en ESPAÑOL
         - Evita duplicados usando ON CONFLICT
-        - Inserta locations, weather_measurements y weather_conditions
+        - Inserta en ubicaciones, mediciones_climaticas y condiciones_climaticas
         - Solo carga registros nuevos (requisito #4)
         """
         print("\n" + "="*80)
@@ -356,16 +441,16 @@ class ETLWeather:
             
             for index, row in self.df_combined.iterrows():
                 try:
-                    # ---- PASO 1: Insertar/Obtener Location ----
+                    # ---- PASO 1: Insertar/Obtener Ubicación ----
                     cursor.execute("""
-                        INSERT INTO locations (
-                            city_name, country_code, country_name, state_province,
-                            latitude, longitude, altitude_meters, timezone, population
+                        INSERT INTO ubicaciones (
+                            nombre_ciudad, codigo_pais, nombre_pais, estado_provincia,
+                            latitud, longitud, altitud_metros, zona_horaria, poblacion
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (city_name, country_code, latitude, longitude)
+                        ON CONFLICT (nombre_ciudad, codigo_pais, latitud, longitud)
                         DO NOTHING
-                        RETURNING location_id;
+                        RETURNING id_ubicacion;
                     """, (
                         row['city_name'], row['country_code'], row.get('country_name', 'México'),
                         row.get('state_province', ''), row['latitude'], row['longitude'],
@@ -375,36 +460,36 @@ class ETLWeather:
                     
                     result = cursor.fetchone()
                     if result:
-                        location_id = result[0]
+                        id_ubicacion = result[0]
                     else:
-                        # Obtener location_id existente
+                        # Obtener id_ubicacion existente
                         cursor.execute("""
-                            SELECT location_id FROM locations
-                            WHERE city_name = %s AND country_code = %s
-                            AND latitude = %s AND longitude = %s
+                            SELECT id_ubicacion FROM ubicaciones
+                            WHERE nombre_ciudad = %s AND codigo_pais = %s
+                            AND latitud = %s AND longitud = %s
                         """, (row['city_name'], row['country_code'], 
                               row['latitude'], row['longitude']))
-                        location_id = cursor.fetchone()[0]
+                        id_ubicacion = cursor.fetchone()[0]
                     
-                    # ---- PASO 2: Insertar Weather Measurement ----
+                    # ---- PASO 2: Insertar Medición Climática ----
                     cursor.execute("""
-                        INSERT INTO weather_measurements (
-                            location_id, measurement_datetime,
-                            temperature_celsius, feels_like_celsius,
-                            temp_min_celsius, temp_max_celsius,
-                            humidity_percent, pressure_hpa,
-                            sea_level_pressure_hpa, ground_level_pressure_hpa,
-                            wind_speed_mps, wind_gust_mps, wind_direction_degrees,
-                            cloudiness_percent, visibility_meters,
-                            precipitation_mm, snow_mm, uv_index,
-                            source_type, data_quality_score
+                        INSERT INTO mediciones_climaticas (
+                            id_ubicacion, fecha_hora_medicion,
+                            temperatura_celsius, sensacion_termica_celsius,
+                            temperatura_minima_celsius, temperatura_maxima_celsius,
+                            humedad_porcentaje, presion_hpa,
+                            presion_nivel_mar_hpa, presion_nivel_suelo_hpa,
+                            velocidad_viento_mps, rafaga_viento_mps, direccion_viento_grados,
+                            nubosidad_porcentaje, visibilidad_metros,
+                            precipitacion_mm, nieve_mm, indice_uv,
+                            tipo_fuente, puntuacion_calidad_datos
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (location_id, measurement_datetime, source_type)
+                        ON CONFLICT (id_ubicacion, fecha_hora_medicion, tipo_fuente)
                         DO NOTHING
-                        RETURNING measurement_id;
+                        RETURNING id_medicion;
                     """, (
-                        location_id, row['measurement_datetime'],
+                        id_ubicacion, row['measurement_datetime'],
                         row['temperature_celsius'], row.get('feels_like_celsius'),
                         row.get('temp_min_celsius'), row.get('temp_max_celsius'),
                         row['humidity_percent'], row['pressure_hpa'],
@@ -414,24 +499,24 @@ class ETLWeather:
                         row.get('cloudiness_percent', 0), row.get('visibility_meters', 10000),
                         row.get('precipitation_mm', 0), row.get('snow_mm', 0), 
                         row.get('uv_index', 0),
-                        row['source_type'], 3  # data_quality_score por defecto
+                        row['source_type'], 3  # puntuacion_calidad_datos por defecto
                     ))
                     
                     result = cursor.fetchone()
                     if result:
-                        measurement_id = result[0]
+                        id_medicion = result[0]
                         
-                        # ---- PASO 3: Insertar Weather Condition ----
+                        # ---- PASO 3: Insertar Condición Climática ----
                         cursor.execute("""
-                            INSERT INTO weather_conditions (
-                                measurement_id, condition_main, condition_description,
-                                condition_icon_code, sunrise_time, sunset_time,
-                                moon_phase, air_quality_index, weather_alert
+                            INSERT INTO condiciones_climaticas (
+                                id_medicion, condicion_principal, descripcion_condicion,
+                                codigo_icono_condicion, hora_amanecer, hora_atardecer,
+                                fase_lunar, indice_calidad_aire, alerta_meteorologica
                             )
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (measurement_id) DO NOTHING;
+                            ON CONFLICT (id_medicion) DO NOTHING;
                         """, (
-                            measurement_id, row.get('condition_main', 'Unknown'),
+                            id_medicion, row.get('condition_main', 'Desconocido'),
                             row.get('condition_description', ''), row.get('condition_icon_code', ''),
                             row.get('sunrise_time'), row.get('sunset_time'),
                             row.get('moon_phase', 0), row.get('air_quality_index', 1),
